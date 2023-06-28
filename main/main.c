@@ -15,18 +15,47 @@ typedef struct {
 } gpsData_Time_t;
 
 /**
- * @brief GPS position i.e., latitude, longitude, Altitude
+ * @brief GPS position (latitude)
  */
 typedef struct {
     int latDeg;
     float latMin;
     char latInd[2];
+} gpsData_latitude_t;
+
+/**
+ * @brief GPS position (longitude)
+ */
+typedef struct {
     int longDeg;
     float longMin;
     char longInd[2];
+} gpsData_longitude_t;
+
+/**
+ * @brief GPS position (altitude)
+ */
+typedef struct {
     float alt;
     char altInd[2];
+} gpsData_altitude_t;
+
+/**
+ * @brief GPS position integrated struct i.e., latitude, longitude, Altitude
+ */
+typedef struct {
+    gpsData_latitude_t LATITUDE;
+    gpsData_longitude_t LONGITUDE;
+    gpsData_altitude_t ALTITUDE;
 } gpsData_Position_t;
+
+/**
+ * @brief Geiodal Separation struct
+ */
+typedef struct {
+    float gpsData_geoSep;
+    char gpsData_geoSepInd[2];
+}gpsData_GeoSep_t;
 
 /**
  * @brief GPS parsed data
@@ -34,18 +63,58 @@ typedef struct {
 typedef struct {
     gpsData_Time_t gpsData_time;
     gpsData_Position_t gpsData_position;
+    gpsData_GeoSep_t gpsData_gS;
     int gpsData_satTracked;
     int gpsData_qIndicator;
-    float gpsData_geoSep;
-    char gpsData_geoSepInd[2];
     float gpsData_hdop;
     float gpsData_tDgps;
-    int gpsData_drsID;
+    char gpsData_drsID[5];
 } nmea_Parsed_t;
 
-//Global variable declarations
-nmea_Parsed_t parsedData;
+/**
+ * @brief Store the status of emptiness of fields
+ */
+typedef struct {
+    bool isEmpty_time;
+    bool isEmpty_latitude;
+    bool isEmpty_latitudeInd;
+    bool isEmpty_longitude;
+    bool isEmpty_longitudeInd;
+    bool isEmpty_altitude;
+    bool isEmpty_altitudeInd;
+    bool isEmpty_qInd;
+    bool isEmpty_satellite;
+    bool isEmpty_hdop;
+    bool isEmpty_geoSep;
+    bool isEmpty_geoSepInd;
+    bool isEmpty_tDgps;
+    bool isEmpty_drsID;
+}gpsData_isEmpty_t;
 
+/**
+ * @brief Store the status of incorrectness of fields
+ */
+typedef struct {
+    bool isFalse_time;
+    bool isFalse_latitude;
+    bool isFalse_latitudeInd;
+    bool isFalse_longitude;
+    bool isFalse_longitudeInd;
+    bool isFalse_altitude;
+    bool isFalse_altitudeInd;
+    bool isFalse_qInd;
+    bool isFalse_satellite;
+    bool isFalse_hdop;
+    bool isFalse_geoSep;
+    bool isFalse_geoSepInd;
+    bool isFalse_tDgps;
+    bool isFalse_drsID;
+}gpsData_isFalse_t;
+
+//Global variable declarations
+static nmea_Parsed_t parsedData;
+static gpsData_isEmpty_t s_statusE;
+static gpsData_isFalse_t s_statusF;
 /**
  * @brief nmea_gga_validator function validates and check the input NMEA sentence by checking its integrity.
  * @param The NMEA sentence is given to the function as the parameter through a pointer.
@@ -109,22 +178,22 @@ bool nmea_gga_validator(char *SENTENCE)
  * @param The NMEA sentence is given to the function as the parameter through a pointer.
  * @return The return type is pointer to a charachter which gives the modified string with (@) in place of empty fields.
  */
-char* emptyFieldsHandler(char* SENTENCE2)
+char* emptyFieldsHandler(char* SENTENCE)
 {    
-    char *temp = malloc(strlen(SENTENCE2) + 15 + 1); // Allocate memory for the modified string
+    char *temp = malloc(strlen(SENTENCE) + 15 + 1); // Allocate memory for the modified string
     
     if (temp == NULL) {
-        printf("Memory NOT allocated!\n");
+        printf("Memory NOT allocated! Code is now in while(1).\n");
         while(1);
     }
     
-    strcpy(temp, SENTENCE2);
+    strcpy(temp, SENTENCE);
     int j = 0; // Index for the modified string
     //Here in this loop a modified string is being created by inserting a special charachter to indicate empty strings.
-    for (int i = 0; i < strlen(SENTENCE2); i++) {
-        temp[j++] = SENTENCE2[i]; // Copy current character to temp
+    for (int i = 0; i < strlen(SENTENCE); i++) {
+        temp[j++] = SENTENCE[i]; // Copy current character to temp
         
-        if (SENTENCE2[i] == ',' && (SENTENCE2[i+1] == ',' || SENTENCE2[i+1] == '*')) {
+        if (SENTENCE[i] == ',' && (SENTENCE[i+1] == ',' || SENTENCE[i+1] == '*')) {
             temp[j++] = '@'; // Insert '@' character
         }
     }
@@ -139,16 +208,16 @@ char* emptyFieldsHandler(char* SENTENCE2)
  */
 
 //As for now the return type is void, it will be changed to proper return type later.
-void Parse_gps_data(char *SENTENCE1)
+nmea_Parsed_t Parse_gps_data(char *SENTENCE)
 {
     
     //Validate the GGA string.
-    if (nmea_gga_validator(SENTENCE1) == false) {
+    if (nmea_gga_validator(SENTENCE) == false) {
         printf("ERROR: Data is not valid!");
-        return;
+        return parsedData;
     }
     //Handle empty fields.
-    char *data = emptyFieldsHandler(SENTENCE1);
+    char *data = emptyFieldsHandler(SENTENCE);
     char temp[strlen(data) + 1];
     char temp1[15];
     //Making a copy of the NMEA sentence for parsing
@@ -165,15 +234,14 @@ void Parse_gps_data(char *SENTENCE1)
     strcpy(temp1, strtok(temp, ","));
     static int s_temp = 0;
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: UTC-Time field is empty!\n");
-        strcpy(temp1, strtok(NULL, ","));
+        //Setting the empty status true
+        s_statusE.isEmpty_time = true;
     }
     else {
         //Loop to make sure the formatting is correct.
-        for (int s_i = 0; s_i <= 9; s_i++ ) {
+        for (int i = 0; i <= 9; i++ ) {
             //Making sure only the allowed charchters are present in the string.
-            if ((temp1[s_i] >= '0' && temp1[s_i] <= '9') || temp1[s_i] == '.') {
+            if ((temp1[i] >= '0' && temp1[i] <= '9') || temp1[i] == '.') {
                 s_temp++;
             }
             else {
@@ -187,24 +255,23 @@ void Parse_gps_data(char *SENTENCE1)
             parsedData.gpsData_time.hour = atoi(strncpy(tempParse, temp1, 2));
             parsedData.gpsData_time.minutes = atoi(strncpy(tempParse, temp1 + 2, 2));
             parsedData.gpsData_time.seconds = atof(strncpy(tempParse, temp1 + 2 + 2, 2));
-            printf("%d:%d:%.3f\n", parsedData.gpsData_time.hour, parsedData.gpsData_time.minutes, parsedData.gpsData_time.seconds);
         }
         else {
-            printf("ERROR: UTC-Time String is not formatted correctly i.e., hhmmss.sss!!!\n");
+            s_statusF.isFalse_time = true;
         }
     }
     //Latitude raw string parsing and validation
     strcpy(temp1, strtok(NULL, ","));
     s_temp = 0;
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: Latitude field is empty!\n");
+        //Setting the empty status true
+        s_statusE.isEmpty_latitude = true;
     }
     else {
         //Loop to make sure the formatting is correct.
-        for (int s_i = 0; s_i <= 8; s_i++ ) {
+        for (int i = 0; i <= 8; i++ ) {
             //Making sure only the allowed charchters are present in the string.
-            if ((temp1[s_i] >= '0' && temp1[s_i] <= '9') || temp1[s_i] == '.') {
+            if ((temp1[i] >= '0' && temp1[i] <= '9') || temp1[i] == '.') {
                 s_temp++;
             }
             else {
@@ -215,41 +282,40 @@ void Parse_gps_data(char *SENTENCE1)
         if (s_temp == strlen(temp1) && temp1[4] == '.') {
             //parsing
             char tempParse[3] = "0";
-            parsedData.gpsData_position.latDeg = atoi(strncpy(tempParse, temp1, 2));
-            parsedData.gpsData_position.latMin = atof(strncpy(tempParse, temp1 + 2, strlen(temp1) - 2));
-            printf("%d(deg) %.4f(min)\n", parsedData.gpsData_position.latDeg, parsedData.gpsData_position.latMin);
+            parsedData.gpsData_position.LATITUDE.latDeg = atoi(strncpy(tempParse, temp1, 2));
+            parsedData.gpsData_position.LATITUDE.latMin = atof(strncpy(tempParse, temp1 + 2, strlen(temp1) - 2));
         }
         else {
-            printf("ERROR: Latitude String is not formatted correctly i.e., ddmm.mmmm!!!\n");
+            s_statusF.isFalse_latitude = true;
         }
     }
     //Latitude-indicator (N/S) string validation
     strcpy(temp1, strtok(NULL, ","));
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: Latitude Indicator field is empty!.\n");
+        //Setting the empty status true
+        s_statusE.isEmpty_latitudeInd = true;
     }
     else if ((temp1[0] == 'N' || temp1[0] == 'S') && strlen(temp1) == 1) {
         //Store in the relevant struct variable
-        strncpy(parsedData.gpsData_position.latInd, temp1, 1);
-        printf("%s\n", parsedData.gpsData_position.latInd);
+        strncpy(parsedData.gpsData_position.LATITUDE.latInd, temp1, 1);
     }
     else {
         //Error when indicator is invalid.
+        s_statusF.isFalse_latitudeInd = true;
         printf("ERROR: Invalid Latitude indicator! \n");
     }
     //Longitude raw string parsing and validation
     strcpy(temp1, strtok(NULL, ","));
     s_temp = 0;
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: Longitude field is empty!\n");
+        //Setting the empty status true
+        s_statusE.isEmpty_longitude = true;
     }
     else {
         //Loop to make sure the formatting is correct.
-        for (int s_i = 0; s_i <= 9; s_i++ ) {
+        for (int i = 0; i <= 9; i++ ) {
             //Making sure only the allowed charchters are present in the string.
-            if ((temp1[s_i] >= '0' && temp1[s_i] <= '9') || temp1[s_i] == '.') {
+            if ((temp1[i] >= '0' && temp1[i] <= '9') || temp1[i] == '.') {
                 s_temp++;
             }
             else {
@@ -260,57 +326,55 @@ void Parse_gps_data(char *SENTENCE1)
         if (s_temp == strlen(temp1) && temp1[5] == '.') {
             //parsing
             char tempParse[4] = "0";
-            parsedData.gpsData_position.longDeg = atoi(strncpy(tempParse, temp1, 3));
-            parsedData.gpsData_position.longMin = atof(strncpy(tempParse, temp1 + 3, strlen(temp1) - 3));
-            printf("%d(deg) %.4f(min)\n", parsedData.gpsData_position.longDeg, parsedData.gpsData_position.longMin);
+            parsedData.gpsData_position.LONGITUDE.longDeg = atoi(strncpy(tempParse, temp1, 3));
+            parsedData.gpsData_position.LONGITUDE.longMin = atof(strncpy(tempParse, temp1 + 3, strlen(temp1) - 3));
         }
         else {
-            printf("ERROR: Longitude String is not formatted correctly i.e., dddmm.mmmm!!!\n");
+            s_statusF.isFalse_longitude = true;
         }
     }
     //Longitude-indicator (E/W) string validation.
     strcpy(temp1, strtok(NULL, ","));
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: Longitude Indicator field is empty!\n");
+        //Setting the empty status true
+        s_statusE.isEmpty_longitudeInd = true;
     }
     else if ((temp1[0] == 'W' || temp1[0] == 'E') && strlen(temp1) == 1) {
         //Store in the relevant struct variable
-        strncpy(parsedData.gpsData_position.longInd, temp1, 1);
-        printf("%s\n", parsedData.gpsData_position.longInd);
+        strncpy(parsedData.gpsData_position.LONGITUDE.longInd, temp1, 1);
     }
     else {
         //Error when indicator is invalid.
+        s_statusF.isFalse_longitudeInd = true;
         printf("ERROR: Invalid Laongitude indicator! \n");
     }
     //GPS quality indicator
     strcpy(temp1, strtok(NULL, ","));
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: GPS Quality Indicator field is empty!\n");
+        //Setting the empty status true
+        s_statusE.isEmpty_qInd = true;
     }
     else if ((atoi(temp1) >= 0 && atoi(temp1) <= 8) && strlen(temp1) == 1) {
         //Store in the relevant struct variable
         parsedData.gpsData_qIndicator = atoi(temp1);
-        printf("%d\n", parsedData.gpsData_qIndicator);
     }
     else {
         //Error when indicator is invalid.
-        printf("ERROR: Invalid quality indicator!\n");
+        s_statusF.isFalse_qInd = true;
     }
     //Sattelites tracked for gps-data transmission
     strcpy(temp1, strtok(NULL, ","));
     s_temp = 0;
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: Satellite data field is empty!\n");
+        //Setting the empty status true
+        s_statusE.isEmpty_satellite = true;
     }
     else {
         //Loop to make sure the formatting is correct.
-        for (int s_i = 0; s_i <= 2; s_i++ ) {
+        for (int i = 0; i <= 2; i++ ) {
             //Making sure only the allowed charchters are present in the string. Also that maximum number of
             //satellites can be 12 Reference: NMEA-0183 documentation.
-            if ((temp1[s_i] >= '0' && temp1[s_i] <= '9') && strlen(temp1) <= 2 && (atoi(temp1) >= 0 && atoi(temp1) <= 12)) {
+            if ((temp1[i] >= '0' && temp1[i] <= '9') && strlen(temp1) <= 2 && (atoi(temp1) >= 0 && atoi(temp1) <= 12)) {
                 s_temp++;
             }
             else {
@@ -321,24 +385,23 @@ void Parse_gps_data(char *SENTENCE1)
         if (s_temp == strlen(temp1)) {
             //Store in the relevant struct variable
             parsedData.gpsData_satTracked = atoi(temp1);
-            printf("%d\n", parsedData.gpsData_satTracked);
         }
         else {
-            printf("ERROR: Satellite data is not Correct i.e., Range (0-12)!!!\n");
+            s_statusF.isFalse_satellite = true;
         }
     }
     //HDOP data
     strcpy(temp1, strtok(NULL, ","));
     s_temp = 0;
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: HDOP data field is empty!\n");
+        //Setting the empty status true
+        s_statusE.isEmpty_hdop = true;
     }
     else {
         //Loop to make sure the formatting is correct.
-        for (int s_i = 0; s_i <= strlen(temp1); s_i++ ) {
+        for (int i = 0; i <= strlen(temp1); i++ ) {
             //Making sure only the allowed charchters are present in the string.
-            if ((temp1[s_i] >= '0' && temp1[s_i] <= '9' && atof(temp1) >= 0.00) || temp1[s_i] == '.' ) {
+            if ((temp1[i] >= '0' && temp1[i] <= '9' && atof(temp1) >= 0.00) || temp1[i] == '.' ) {
                 s_temp++;
             }
             else {
@@ -349,67 +412,114 @@ void Parse_gps_data(char *SENTENCE1)
         if (s_temp == strlen(temp1)) {
             //Store in the relevant struct variable
             parsedData.gpsData_hdop = atof(temp1);
-            printf("%.2f\n", parsedData.gpsData_hdop);
         }
         else {
-            printf("ERROR: HDOP data is NOT Correct!!!\n");
+            s_statusF.isFalse_hdop = true;
         }
     }
     //Altitude string parsing
     strcpy(temp1, strtok(NULL, ","));
     s_temp = 0;
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: Altitude data field is empty!\n");
+        //Setting the empty status true
+        s_statusE.isEmpty_altitude = true;
     }
     else {
-        //Loop to make sure the formatting is correct.
-        for (int s_i = 0; s_i <= strlen(temp1); s_i++ ) {
+        //Parsing and validation of Altitude field
+        if (temp1[0] == '-') {
+            for (int i = 0; i <= strlen(temp1) - 1; i++) {
+                temp1[i] = temp1[i + 1];
+            }
+            temp1[strlen(temp1)] = '\0';
+            for (int i = 0; i <= strlen(temp1); i++ ) {
             //Making sure only the allowed charchters are present in the string.
-            if ((temp1[s_i] >= '0' && temp1[s_i] <= '9' && atof(temp1) >= 0.00) || temp1[s_i] == '.' ) {
+            if ((temp1[i] >= '0' && temp1[i] <= '9' && atof(temp1) >= 0.00) || temp1[i] == '.' ) {
                 s_temp++;
             }
             else {
                 break;
             }
-        }
-        //Comparing the s_temp variable with the Altitude string length to ensure the string is of valid length.
-        if (s_temp == strlen(temp1)) {
-            //Store in the relevant struct variable
-            parsedData.gpsData_position.alt = atof(temp1);
-            printf("%.2f\n", parsedData.gpsData_position.alt);
+            }
+            //Comparing the s_temp variable with the Altitude string length to ensure the string is of valid length.
+            if (s_temp == strlen(temp1)) {
+                //Store in the relevant struct variable
+                parsedData.gpsData_position.ALTITUDE.alt = -1 * atof(temp1);
+            }
+            else {
+                s_statusF.isFalse_altitude = true;
+            }
         }
         else {
-            printf("ERROR: Altitude data is not Correct!!!\n");
+            for (int i = 0; i <= strlen(temp1); i++ ) {
+                //Making sure only the allowed charchters are present in the string.
+                if ((temp1[i] >= '0' && temp1[i] <= '9' && atof(temp1) >= 0.00) || temp1[i] == '.' ) {
+                    s_temp++;
+                }
+                else {
+                    break;
+                }
+            }
+            //Comparing the s_temp variable with the Altitude string length to ensure the string is of valid length.
+            if (s_temp == strlen(temp1)) {
+                //Store in the relevant struct variable
+                parsedData.gpsData_position.ALTITUDE.alt = atof(temp1);
+            }
+            else {
+                s_statusF.isFalse_altitude = true;
+            }
         }
     }
     //Altitude units (meter/M)
     strcpy(temp1, strtok(NULL, ","));
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: Longitude Indicator field is empty!\n");
+        //Setting the empty status true
+        s_statusE.isEmpty_altitudeInd = true;
     }
     else if ((temp1[0] == 'M') && strlen(temp1) == 1) {
         //Store in the relevant struct variable
-            strcpy(parsedData.gpsData_position.altInd, temp1);
-            printf("%s\n", parsedData.gpsData_position.altInd);
+            strcpy(parsedData.gpsData_position.ALTITUDE.altInd, temp1);
     }
     else {
         //Error when indicator is invalid.
+        s_statusF.isFalse_altitudeInd = true;
         printf("ERROR: Invalid Altitude unit! \n");
     }
     //Height of geoid string parsing
     strcpy(temp1, strtok(NULL, ","));
     s_temp = 0;
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: Geoid height data field is empty!\n");
+        //Setting the empty status true
+        s_statusE.isEmpty_geoSep = true;
     }
     else {
-        //Loop to make sure the formatting is correct.
-        for (int s_i = 0; s_i <= strlen(temp1); s_i++ ) {
+        //Parsing and validation of Geoid Separation field
+        if (temp1[0] == '-') {
+            for (int i = 0; i <= strlen(temp1) - 1; i++) {
+                temp1[i] = temp1[i + 1];
+            }
+            temp1[strlen(temp1)] = '\0';
+            for (int i = 0; i <= strlen(temp1); i++ ) {
+                //Making sure only the allowed charchters are present in the string.
+                if ((temp1[i] >= '0' && temp1[i] <= '9') || temp1[i] == '.') {
+                    s_temp++;
+                }
+                else {
+                    break;
+                }
+            }
+            //Comparing the s_temp variable with the geoid height string length to ensure the string is of valid length.
+            if (s_temp == strlen(temp1)) {
+                //Store in the relevant struct variable
+                parsedData.gpsData_gS.gpsData_geoSep = -1 * atof(temp1);
+            }
+            else {
+                s_statusF.isFalse_geoSep = true;
+            }
+        }
+        else {
+            for (int i = 0; i <= strlen(temp1); i++ ) {
             //Making sure only the allowed charchters are present in the string.
-            if ((temp1[s_i] >= '0' && temp1[s_i] <= '9' && atof(temp1) >= 0.00) || temp1[s_i] == '.' ) {
+            if ((temp1[i] >= '0' && temp1[i] <= '9') || temp1[i] == '.') {
                 s_temp++;
             }
             else {
@@ -419,40 +529,41 @@ void Parse_gps_data(char *SENTENCE1)
         //Comparing the s_temp variable with the geoid height string length to ensure the string is of valid length.
         if (s_temp == strlen(temp1)) {
             //Store in the relevant struct variable
-            parsedData.gpsData_geoSep = atof(temp1);
-            printf("%.2f\n", parsedData.gpsData_geoSep);
+            parsedData.gpsData_gS.gpsData_geoSep = atof(temp1);
         }
         else {
-            printf("ERROR: Geoid height data is NOT Correct!!!\n");
+            s_statusF.isFalse_geoSep = true;
         }
+        }
+        
     }
     //Geoid height units (meter/M)
     strcpy(temp1, strtok(NULL, ","));
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: Geoid height Indicator field is empty!\n");
+        //Setting the empty status true
+        s_statusE.isEmpty_geoSepInd = true;
     }
     else if ((temp1[0] == 'M') && strlen(temp1) == 1) {
         //Store in the relevant struct variable
-        strcpy(parsedData.gpsData_geoSepInd, temp1);
-        printf("%s\n", parsedData.gpsData_geoSepInd);
+        strcpy(parsedData.gpsData_gS.gpsData_geoSepInd, temp1);
     }
     else {
         //Error when indicator is invalid.
-        printf("ERROR: Invalid geoid height unit!\n");
+        s_statusF.isFalse_geoSepInd = true;
+        printf("ERROR: Invalid geoid height indicator!\n");
     }
     //Time since last DGPS update string validation
     strcpy(temp1, strtok(NULL, ","));
     s_temp = 0;
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: Time since last DGPS update data field is empty!\n");
+        //Setting the empty status true
+        s_statusE.isEmpty_tDgps = true;
     }
     else {
         //Loop to make sure the formatting is correct.
-        for (int s_i = 0; s_i <= strlen(temp1); s_i++ ) {
+        for (int i = 0; i <= strlen(temp1); i++ ) {
             //Making sure only the allowed charchters are present in the string.
-            if ((temp1[s_i] >= '0' && temp1[s_i] <= '9' && atof(temp1) >= 0.00) || temp1[s_i] == '.' ) {
+            if ((temp1[i] >= '0' && temp1[i] <= '9' && atof(temp1) >= 0.00) || temp1[i] == '.' ) {
                 s_temp++;
             }
             else {
@@ -463,25 +574,24 @@ void Parse_gps_data(char *SENTENCE1)
         if (s_temp == strlen(temp1)) {
             //Store in the relevant struct variable
             parsedData.gpsData_tDgps = atof(temp1);
-            printf("%.2f\n", parsedData.gpsData_tDgps);
         }
         else {
-            printf("ERROR: Time since last DGPS update data is NOT Correct!!!\n");
+            s_statusF.isFalse_tDgps = true;
         }
     }
     //Differential reference station ID data string
-    strcpy(temp1, strtok(NULL, ","));
+    strcpy(temp1, strtok(NULL, "\0"));
     s_temp = 0;
     if (temp1[0] == '@'){
-        //If the string is empty, the empty warning will be generated here.
-        printf("WARNING: Differential reference station ID field is empty!\n");
+        //Setting the empty status true
+        s_statusE.isEmpty_drsID = true;
     }
     else {
         //Loop to make sure the formatting is correct.
-        for (int s_i = 0; s_i <= 2; s_i++ ) {
+        for (int i = 0; i <= 4; i++ ) {
             //Making sure only the allowed charchters are present in the string. Also that maximum number of
             //differential reference station IDs can be 1023 Reference: NMEA-0183 documentation.
-            if ((temp1[s_i] >= '0' && temp1[s_i] <= '9') && strlen(temp1) <= 4 && (atoi(temp1) >= 0 && atoi(temp1) <= 1023)) {
+            if ((temp1[i] >= '0' && temp1[i] <= '9') && strlen(temp1) == 4 && (atoi(temp1) >= 0 && atoi(temp1) <= 1023)) {
                 s_temp++;
             }
             else {
@@ -491,17 +601,338 @@ void Parse_gps_data(char *SENTENCE1)
         //Comparing the s_temp variable with the differential reference station ID string length to ensure the string is of valid length.
         if (s_temp == strlen(temp1)) {
             //Store in the relevant struct variable
-            parsedData.gpsData_drsID = atoi(temp1);
-            printf("%d\n", parsedData.gpsData_drsID);
+            strcpy(parsedData.gpsData_drsID, temp1);
         }
         else {
-            printf("ERROR: Differential reference station ID is NOT Correct i.e., Range (0000-1023)!!!\n");
+            s_statusF.isFalse_drsID = true;
         }
+    }
+    return parsedData;
+}
+
+/**
+ * @brief printParseData function prints the parsed data in accordance with the isEmpty and isFalse status.
+ * @param nmea_Parsed_t i.e., the parsed data (struct) is given as a parameter.
+ * @return void
+ */
+void printParsedData (nmea_Parsed_t p_data)
+{
+    //Print parsed data
+    if (s_statusE.isEmpty_time) {
+        printf("WARNING: UTC-TIME data field is empty!\n");
+    }
+    else if (s_statusF.isFalse_time) {
+        printf("ERROR: UTC-Time String is NOT formatted correctly i.e., hhmmss.sss!!!\n");
+    }
+    else {
+        printf("UTC-TIME----------------------------> %d:%d:%.3f\n", parsedData.gpsData_time.hour, parsedData.gpsData_time.minutes, parsedData.gpsData_time.seconds);
+    }
+    if (s_statusE.isEmpty_latitude) {
+        printf("WARNING: LATITUDE data field is empty!\n");
+    }
+    else if (s_statusF.isFalse_latitude) {
+        printf("ERROR: LATITUDE data is NOT formatted correctly i.e., ddmm.mmmm!!!\n");
+    }
+    else {
+        printf("LATITUDE----------------------------> %d° %.4f\' (%s)\n", parsedData.gpsData_position.LATITUDE.latDeg, parsedData.gpsData_position.LATITUDE.latMin, parsedData.gpsData_position.LATITUDE.latInd);
+    }
+    if (s_statusE.isEmpty_longitude) {
+        printf("WARNING: LONGITUDE data field is empty!\n");
+    }
+    else if (s_statusF.isFalse_longitude) {
+        printf("ERROR: LONGITUDE data is NOT formatted correctly i.e., dddmm.mmmm!!!\n");
+    }
+    else {
+        printf("LONGITUDE---------------------------> %d° %.4f\' (%s)\n", parsedData.gpsData_position.LONGITUDE.longDeg, parsedData.gpsData_position.LONGITUDE.longMin, parsedData.gpsData_position.LONGITUDE.longInd);
+    }
+    if (s_statusE.isEmpty_altitude) {
+        printf("WARNING: ALTITUDE data field is empty!\n");
+    }
+    else if (s_statusF.isFalse_altitude) {
+        printf("ERROR: ALTITUDE data is NOT Correct!!!\n");
+    }
+    else {
+        printf("ALTITUDE(Above MSL)-----------------> %.1f (%s)\n", parsedData.gpsData_position.ALTITUDE.alt, parsedData.gpsData_position.ALTITUDE.altInd);
+    }
+    if (s_statusE.isEmpty_qInd) {
+        printf("WARNING: GPS-QUALITY INDICATOR data field is empty!\n");
+    }
+    else if (s_statusF.isFalse_qInd) {
+        printf("ERROR: GPS-QUALITY INDICATOR is NOT Correct!!!\n");
+    }
+    else {
+        printf("GPS-QUALITY INDICATOR---------------> %d\n", parsedData.gpsData_qIndicator);
+    }
+    if (s_statusE.isEmpty_satellite) {
+        printf("WARNING: SATELLITE TRACKED data field is empty!\n");
+    }
+    else if (s_statusF.isFalse_satellite) {
+        printf("ERROR: SATELLITE TRACKED data is NOT Correct i.e., Range (0-12)!!!\n");
+    }
+    else {
+        printf("SATELLITE TRACKED-------------------> %d\n", parsedData.gpsData_satTracked);
+    }
+    if (s_statusE.isEmpty_hdop) {
+        printf("WARNING: HDOP data field is empty!\n");
+    }
+    else if (s_statusF.isFalse_hdop) {
+        printf("ERROR: HDOP data is NOT Correct!!!\n");
+    }
+    else {
+        printf("HDOP--------------------------------> %.2f\n", parsedData.gpsData_hdop);
+    }
+    if (s_statusE.isEmpty_geoSep) {
+        printf("WARNING: GEOIDAL SEPARATION data field is empty!\n");
+    }
+    else if (s_statusF.isFalse_geoSep) {
+        printf("ERROR: GEOIDAL SEPARATION data is NOT Correct!!!\n");
+    }
+    else {
+        printf("GEOIDAL SEPARATION------------------> %.1f (%s)\n", parsedData.gpsData_gS.gpsData_geoSep, parsedData.gpsData_gS.gpsData_geoSepInd);
+    }
+    if (s_statusE.isEmpty_tDgps) {
+        printf("WARNING: TIME OF LAST DGPS UPDATE data field is empty!\n");
+    }
+    else if (s_statusF.isFalse_tDgps) {
+        printf("ERROR: TIME OF LAST DGPS UPDATE data is NOT Correct!!!\n");
+    }
+    else {
+        printf("TIME OF LAST DGPS UPDATE------------> %.2f\n", parsedData.gpsData_tDgps);
+    }
+    if (s_statusE.isEmpty_drsID) {
+        printf("WARNING: DIFFERENTIAL REFERENCE STATION ID data field is empty!\n");
+    }
+    else if (s_statusF.isFalse_drsID) {
+        printf("ERROR: DIFFERENTIAL REFERENCE STATION ID is NOT Correct i.e., Range (0000-1023)!!!\n");
+    }
+    else {
+        printf("DIFFERENTIAL REFERENCE STATION ID---> %s\n", parsedData.gpsData_drsID);
+    }
+}
+
+/**
+ * @brief getTime function prints the UTC-TIME to console and gives the hour, minute and second values to the user
+ * @param NMEA_SENTENCE is given as the parameter
+ * @return gpsData_Time_t is the return type which returns the utc-time
+ */
+gpsData_Time_t getTime (char* SENTENCE)
+{
+    nmea_Parsed_t getTime = Parse_gps_data(SENTENCE);
+    if (s_statusE.isEmpty_longitude) {
+        printf("WARNING: UTC-TIME data field is empty!\n");
+        return getTime.gpsData_time;
+    }
+    else if (s_statusF.isFalse_time) {
+        printf("ERROR: UTC-Time String is NOT formatted correctly i.e., hhmmss.sss!!!\n");
+        return getTime.gpsData_time;
+    }
+    else {
+        printf("UTC-TIME----------------------------> %d:%d:%.3f\n", getTime.gpsData_time.hour, getTime.gpsData_time.minutes, getTime.gpsData_time.seconds);
+        return getTime.gpsData_time;
+    }
+}
+
+/**
+ * @brief getLongitude function prints the longitude to console and gives the longitude data to user
+ * @param NMEA_SENTENCE is given as the parameter
+ * @return gpsData_longitude_t is the return type which returns the longitude
+ */
+gpsData_longitude_t getLongitude (char* SENTENCE)
+{
+    nmea_Parsed_t getlong = Parse_gps_data(SENTENCE);
+    if (s_statusE.isEmpty_longitude) {
+        printf("WARNING: LONGITUDE data field is empty!\n");
+        return getlong.gpsData_position.LONGITUDE;
+    }
+    else if (s_statusF.isFalse_longitude) {
+        printf("ERROR: LONGITUDE data is NOT formatted correctly i.e., dddmm.mmmm!!!\n");
+        return getlong.gpsData_position.LONGITUDE;
+    }
+    else {
+        printf("\nLONGITUDE---------------------------> %d° %.4f\' (%s)\n", getlong.gpsData_position.LONGITUDE.longDeg, getlong.gpsData_position.LONGITUDE.longMin, getlong.gpsData_position.LONGITUDE.longInd);
+        return getlong.gpsData_position.LONGITUDE;
+    }   
+}
+
+/**
+ * @brief getLatitude function prints the latitude to console and gives the latitude data to user
+ * @param NMEA_SENTENCE is given as the parameter
+ * @return gpsData_latitude_t is the return type which returns the latitude
+ */
+gpsData_latitude_t getLatitude (char* SENTENCE)
+{
+    nmea_Parsed_t getlat = Parse_gps_data(SENTENCE);
+    if (s_statusE.isEmpty_longitude) {
+        printf("WARNING: LONGITUDE data field is empty!\n");
+        return getlat.gpsData_position.LATITUDE;
+    }
+    else if (s_statusF.isFalse_latitude) {
+        printf("ERROR: LATITUDE data is NOT formatted correctly i.e., ddmm.mmmm!!!\n");
+        return getlat.gpsData_position.LATITUDE;
+    }
+    else {
+        printf("\nLATITUDE----------------------------> %d° %.4f\' (%s)\n", getlat.gpsData_position.LATITUDE.latDeg, getlat.gpsData_position.LATITUDE.latMin, getlat.gpsData_position.LATITUDE.latInd);
+        return getlat.gpsData_position.LATITUDE;
+    }
+}
+
+/**
+ * @brief getAltitude function prints the altitude to console and gives the altitude data to user
+ * @param NMEA_SENTENCE is given as the parameter
+ * @return gpsData_altitude_t is the return type which returns the altitude
+ */
+gpsData_altitude_t getAltitude (char* SENTENCE)
+{
+    nmea_Parsed_t getalt = Parse_gps_data(SENTENCE);
+    if (s_statusE.isEmpty_altitude) {
+        printf("WARNING: Altitude data field is empty!\n");
+        return getalt.gpsData_position.ALTITUDE;
+    }
+    else if (s_statusF.isFalse_altitude) {
+        printf("ERROR: ALTITUDE data is NOT Correct!!!\n");
+        return getalt.gpsData_position.ALTITUDE;
+    }
+    else {
+        printf("\nALTITUDE(Above MSL)-----------------> %.1f (%s)\n", getalt.gpsData_position.ALTITUDE.alt, getalt.gpsData_position.ALTITUDE.altInd);
+        return getalt.gpsData_position.ALTITUDE;
+    }
+}
+
+/**
+ * @brief getGeoSep function prints the geoid height to console and gives the geoid height data to user
+ * @param NMEA_SENTENCE is given as the parameter
+ * @return gpsData_GeoSep_t is the return type which returns the geoid height
+ */
+gpsData_GeoSep_t getGeoSep (char* SENTENCE)
+{
+    nmea_Parsed_t getGeo = Parse_gps_data(SENTENCE);
+    if (s_statusE.isEmpty_geoSep) {
+        printf("WARNING: GEOIDAL SEPARATION data field is empty!\n");
+        return getGeo.gpsData_gS;
+    }
+    else if (s_statusF.isFalse_geoSep) {
+        printf("ERROR: GEOIDAL SEPARATION data is NOT Correct!!!\n");
+        return getGeo.gpsData_gS;
+    }
+    else {
+        printf("GEOIDAL SEPARATION------------------> %.1f (%s)\n", getGeo.gpsData_gS.gpsData_geoSep, getGeo.gpsData_gS.gpsData_geoSepInd);
+        return getGeo.gpsData_gS;
+    }
+}
+
+/**
+ * @brief getHdop function prints the HDOP to console and gives HDOP value to user
+ * @param NMEA_SENTENCE is given as the parameter
+ * @return float is the return type which returns the HDOP
+ */
+float getHdop (char* SENTENCE)
+{
+    nmea_Parsed_t gethdop = Parse_gps_data(SENTENCE);
+    if (s_statusE.isEmpty_hdop) {
+        printf("WARNING: HDOP data field is empty!\n");
+        return gethdop.gpsData_hdop;
+    }
+    else if (s_statusF.isFalse_hdop) {
+        printf("ERROR: HDOP data is NOT Correct!!!\n");
+        return gethdop.gpsData_hdop;
+    }
+    else {
+        printf("HDOP--------------------------------> %.f\n", gethdop.gpsData_hdop);
+        return gethdop.gpsData_hdop;
+    }
+}
+
+/**
+ * @brief getTdgps function prints the TIME OF LAST DGPS UPDATE to console and gives tDgps value to user
+ * @param NMEA_SENTENCE is given as the parameter
+ * @return float is the return type which returns the gpsData_tDgps
+ */
+float getTdgps (char* SENTENCE)
+{
+    nmea_Parsed_t gettDgps = Parse_gps_data(SENTENCE);
+    if (s_statusE.isEmpty_tDgps) {
+        printf("WARNING: TIME OF LAST DGPS UPDATE data field is empty!\n");
+        return gettDgps.gpsData_tDgps;
+    }
+    else if (s_statusF.isFalse_tDgps) {
+        printf("ERROR: TIME OF LAST DGPS UPDATE data is NOT Correct!!!\n");
+        return gettDgps.gpsData_tDgps;
+    }
+    else {
+        printf("TIME OF LAST DGPS UPDATE------------> %.2f\n", gettDgps.gpsData_tDgps);
+        return gettDgps.gpsData_tDgps;
+    }
+}
+
+/**
+ * @brief getSatData function prints the satellite data to console and gives satTracked value to user
+ * @param NMEA_SENTENCE is given as the parameter
+ * @return int is the return type which returns the gpsData_satTracked
+ */
+int getSatData (char* SENTENCE)
+{
+    nmea_Parsed_t getsat = Parse_gps_data(SENTENCE);
+    if (s_statusE.isEmpty_satellite) {
+        printf("WARNING: SATELLITE TRACKED data field is empty!\n");
+        return getsat.gpsData_satTracked;
+    }
+    else if (s_statusF.isFalse_satellite) {
+        printf("ERROR: SATELLITE TRACKED data is NOT Correct i.e., Range (0-12)!!!\n");
+        return getsat.gpsData_satTracked;
+    }
+    else {
+        printf("SATELLITE TRACKED-------------------> %d\n", getsat.gpsData_satTracked);
+        return getsat.gpsData_satTracked;
+    }
+}
+
+/**
+ * @brief getSatData function prints the satellite data to console and gives satTracked value to user
+ * @param NMEA_SENTENCE is given as the parameter
+ * @return int is the return type which returns the gpsData_satTracked
+ */
+int getQInd (char* SENTENCE)
+{
+    nmea_Parsed_t getqind = Parse_gps_data(SENTENCE);
+    if (s_statusE.isEmpty_satellite) {
+        printf("WARNING: GPS-QUALITY INDICATOR data field is empty!\n");
+        return getqind.gpsData_qIndicator;
+    }
+    else if (s_statusF.isFalse_qInd) {
+        printf("ERROR: GPS-QUALITY INDICATOR is NOT Correct!!!\n");
+        return getqind.gpsData_qIndicator;
+    }
+    else {
+        printf("GPS-QUALITY INDICATOR---------------> %d\n", getqind.gpsData_qIndicator);
+        return getqind.gpsData_qIndicator;
+    }
+}
+
+/**
+ * @brief getDrs function prints the DIFFERENTIAL REFERENCE STATION ID data to console and gives drsID value to user
+ * @param NMEA_SENTENCE is given as the parameter
+ * @return char* is the return type which returns the pointer to gpsData_drsID
+ */
+char* getDrs (char* SENTENCE)
+{
+    nmea_Parsed_t getdrsID = Parse_gps_data(SENTENCE);
+    if (s_statusE.isEmpty_satellite) {
+        printf("WARNING: DIFFERENTIAL REFERENCE STATION ID data field is empty!\n");
+        return getdrsID.gpsData_drsID;
+    }
+    else if (s_statusF.isFalse_drsID) {
+        printf("ERROR: DIFFERENTIAL REFERENCE STATION ID is NOT Correct i.e., Range (0000-1023)!!!\n");
+        return getdrsID.gpsData_drsID;
+    }
+    else {
+        printf("DIFFERENTIAL REFERENCE STATION ID---> %s\n", getdrsID.gpsData_drsID);
+        return getdrsID.gpsData_drsID;
     }
 }
 
 //A test string is used to check whether the function Parse_gps_data is working properly.
 void app_main(void) {
-    char *NMEA_SENTENCE = "$GPGGA,092750.000,5321.6802,N,00630.3372,W,1,8,1.03,61.7,M,55.2,M,,*76";
-    Parse_gps_data(NMEA_SENTENCE);
+    char *NMEA_SENTENCE = "$GPGGA,002153.000,3342.6618,N,11751.3858,W,1,10,1.2,27.0,M,-34.2,M,,0000*5E";
+    char* l = getDrs(NMEA_SENTENCE);
+    
 }
