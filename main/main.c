@@ -23,25 +23,28 @@ typedef struct {
     char latInd[2];
     int longDeg;
     float longMin;
-    char long_Ind[2];
-    float altitude;
-    char altitude_U[2];
+    char longInd[2];
+    float alt;
+    char altInd[2];
 } gpsData_Position_t;
 
 /**
  * @brief GPS parsed data
  */
 typedef struct {
-    gpsData_Time_t time;
-    gpsData_Position_t position;
-    int gpsData_satInView;
+    gpsData_Time_t gpsData_time;
+    gpsData_Position_t gpsData_position;
+    int gpsData_satTracked;
     int gpsData_qIndicator;
     float gpsData_geoSep;
-    char gpsData_geoSep_U[2];
+    char gpsData_geoSepInd[2];
     float gpsData_hdop;
-    float gpsData_dgps;
+    float gpsData_tDgps;
     int gpsData_drsID;
 } nmea_Parsed_t;
+
+//Global variable declarations
+nmea_Parsed_t parsedData;
 
 /**
  * @brief nmea_gga_validator function validates and check the input NMEA sentence by checking its integrity.
@@ -138,6 +141,7 @@ char* emptyFieldsHandler(char* SENTENCE2)
 //As for now the return type is void, it will be changed to proper return type later.
 void Parse_gps_data(char *SENTENCE1)
 {
+    
     //Validate the GGA string.
     if (nmea_gga_validator(SENTENCE1) == false) {
         printf("ERROR: Data is not valid!");
@@ -178,8 +182,12 @@ void Parse_gps_data(char *SENTENCE1)
         }
         //Comparing the s_temp variable with the utc string length to ensure the string is of valid length i.e, 10.
         if (s_temp == strlen(temp1) && temp1[6] == '.') {
-            //Here the actual parsing will be done, for now I'm just using a print statement.
-            printf("INFO: Valid-UTC String.\n%s\n", temp1);
+            //parsing
+            char tempParse[3] = "0";
+            parsedData.gpsData_time.hour = atoi(strncpy(tempParse, temp1, 2));
+            parsedData.gpsData_time.minutes = atoi(strncpy(tempParse, temp1 + 2, 2));
+            parsedData.gpsData_time.seconds = atof(strncpy(tempParse, temp1 + 2 + 2, 2));
+            printf("%d:%d:%.3f\n", parsedData.gpsData_time.hour, parsedData.gpsData_time.minutes, parsedData.gpsData_time.seconds);
         }
         else {
             printf("ERROR: UTC-Time String is not formatted correctly i.e., hhmmss.sss!!!\n");
@@ -205,8 +213,11 @@ void Parse_gps_data(char *SENTENCE1)
         }
         //Comparing the s_temp variable with the latitude string length to ensure the string is of valid length i.e, 9.
         if (s_temp == strlen(temp1) && temp1[4] == '.') {
-            //Here the actual parsing will be done, for now I'm just using a print statement.
-            printf("INFO: Valid-Latitude String.\n%s\n", temp1);
+            //parsing
+            char tempParse[3] = "0";
+            parsedData.gpsData_position.latDeg = atoi(strncpy(tempParse, temp1, 2));
+            parsedData.gpsData_position.latMin = atof(strncpy(tempParse, temp1 + 2, strlen(temp1) - 2));
+            printf("%d(deg) %.4f(min)\n", parsedData.gpsData_position.latDeg, parsedData.gpsData_position.latMin);
         }
         else {
             printf("ERROR: Latitude String is not formatted correctly i.e., ddmm.mmmm!!!\n");
@@ -219,8 +230,9 @@ void Parse_gps_data(char *SENTENCE1)
         printf("WARNING: Latitude Indicator field is empty!.\n");
     }
     else if ((temp1[0] == 'N' || temp1[0] == 'S') && strlen(temp1) == 1) {
-        //Already parsed because it is only one charachter N/S
-        printf("INFO: Valid Indicator. \n%s\n", temp1);
+        //Store in the relevant struct variable
+        strncpy(parsedData.gpsData_position.latInd, temp1, 1);
+        printf("%s\n", parsedData.gpsData_position.latInd);
     }
     else {
         //Error when indicator is invalid.
@@ -246,11 +258,14 @@ void Parse_gps_data(char *SENTENCE1)
         }
         //Comparing the s_temp variable with the longitude string length to ensure the string is of valid length i.e, 10.
         if (s_temp == strlen(temp1) && temp1[5] == '.') {
-            //Here the actual parsing will be done, for now I'm just using a print statement.
-            printf("INFO: Valid-Longitude String.\n%s\n", temp1);
+            //parsing
+            char tempParse[4] = "0";
+            parsedData.gpsData_position.longDeg = atoi(strncpy(tempParse, temp1, 3));
+            parsedData.gpsData_position.longMin = atof(strncpy(tempParse, temp1 + 3, strlen(temp1) - 3));
+            printf("%d(deg) %.4f(min)\n", parsedData.gpsData_position.longDeg, parsedData.gpsData_position.longMin);
         }
         else {
-            printf("ERROR: Longitude String is not formatted correctly i.e., ddmm.mmmm!!!\n");
+            printf("ERROR: Longitude String is not formatted correctly i.e., dddmm.mmmm!!!\n");
         }
     }
     //Longitude-indicator (E/W) string validation.
@@ -260,8 +275,9 @@ void Parse_gps_data(char *SENTENCE1)
         printf("WARNING: Longitude Indicator field is empty!\n");
     }
     else if ((temp1[0] == 'W' || temp1[0] == 'E') && strlen(temp1) == 1) {
-        //Already parsed because it is only one charachter W/E.
-        printf("INFO: Valid Indicator. \n%s\n", temp1);
+        //Store in the relevant struct variable
+        strncpy(parsedData.gpsData_position.longInd, temp1, 1);
+        printf("%s\n", parsedData.gpsData_position.longInd);
     }
     else {
         //Error when indicator is invalid.
@@ -274,8 +290,9 @@ void Parse_gps_data(char *SENTENCE1)
         printf("WARNING: GPS Quality Indicator field is empty!\n");
     }
     else if ((atoi(temp1) >= 0 && atoi(temp1) <= 8) && strlen(temp1) == 1) {
-        //Already parsed because it is only one charachter range (0-8).
-        printf("INFO: Valid quality Indicator.\n%s\n", temp1);
+        //Store in the relevant struct variable
+        parsedData.gpsData_qIndicator = atoi(temp1);
+        printf("%d\n", parsedData.gpsData_qIndicator);
     }
     else {
         //Error when indicator is invalid.
@@ -302,8 +319,9 @@ void Parse_gps_data(char *SENTENCE1)
         }
         //Comparing the s_temp variable with the satellite data string length to ensure the string is of valid length.
         if (s_temp == strlen(temp1)) {
-            //Here the actual parsing will be done, for now I'm just using a print statement.
-            printf("INFO: Valid Satellite data string.\n%s\n", temp1);
+            //Store in the relevant struct variable
+            parsedData.gpsData_satTracked = atoi(temp1);
+            printf("%d\n", parsedData.gpsData_satTracked);
         }
         else {
             printf("ERROR: Satellite data is not Correct i.e., Range (0-12)!!!\n");
@@ -329,8 +347,9 @@ void Parse_gps_data(char *SENTENCE1)
         }
         //Comparing the s_temp variable with the HDOP string length to ensure the string is of valid length.
         if (s_temp == strlen(temp1)) {
-            //Here the actual parsing will be done, for now I'm just using a print statement.
-            printf("INFO: HDOP data string is valid.\n%s\n", temp1);
+            //Store in the relevant struct variable
+            parsedData.gpsData_hdop = atof(temp1);
+            printf("%.2f\n", parsedData.gpsData_hdop);
         }
         else {
             printf("ERROR: HDOP data is NOT Correct!!!\n");
@@ -356,8 +375,9 @@ void Parse_gps_data(char *SENTENCE1)
         }
         //Comparing the s_temp variable with the Altitude string length to ensure the string is of valid length.
         if (s_temp == strlen(temp1)) {
-            //Here the actual parsing will be done, for now I'm just using a print statement.
-            printf("INFO: Altitude data string is valid.\n%s\n", temp1);
+            //Store in the relevant struct variable
+            parsedData.gpsData_position.alt = atof(temp1);
+            printf("%.2f\n", parsedData.gpsData_position.alt);
         }
         else {
             printf("ERROR: Altitude data is not Correct!!!\n");
@@ -370,8 +390,9 @@ void Parse_gps_data(char *SENTENCE1)
         printf("WARNING: Longitude Indicator field is empty!\n");
     }
     else if ((temp1[0] == 'M') && strlen(temp1) == 1) {
-        //Already parsed because it is only one charachter (M).
-        printf("INFO: Valid unit.\n%s\n", temp1);
+        //Store in the relevant struct variable
+            strcpy(parsedData.gpsData_position.altInd, temp1);
+            printf("%s\n", parsedData.gpsData_position.altInd);
     }
     else {
         //Error when indicator is invalid.
@@ -397,8 +418,9 @@ void Parse_gps_data(char *SENTENCE1)
         }
         //Comparing the s_temp variable with the geoid height string length to ensure the string is of valid length.
         if (s_temp == strlen(temp1)) {
-            //Here the actual parsing will be done, for now I'm just using a print statement.
-            printf("INFO: Geoid height data string is valid.\n%s\n", temp1);
+            //Store in the relevant struct variable
+            parsedData.gpsData_geoSep = atof(temp1);
+            printf("%.2f\n", parsedData.gpsData_geoSep);
         }
         else {
             printf("ERROR: Geoid height data is NOT Correct!!!\n");
@@ -411,8 +433,9 @@ void Parse_gps_data(char *SENTENCE1)
         printf("WARNING: Geoid height Indicator field is empty!\n");
     }
     else if ((temp1[0] == 'M') && strlen(temp1) == 1) {
-        //Already parsed because it is only one charachter (M).
-        printf("INFO: Valid unit. \n%s\n", temp1);
+        //Store in the relevant struct variable
+        strcpy(parsedData.gpsData_geoSepInd, temp1);
+        printf("%s\n", parsedData.gpsData_geoSepInd);
     }
     else {
         //Error when indicator is invalid.
@@ -438,8 +461,9 @@ void Parse_gps_data(char *SENTENCE1)
         }
         //Comparing the s_temp variable with the Time since last DGPS update string length to ensure the string is of valid length.
         if (s_temp == strlen(temp1)) {
-            //Here the actual parsing will be done, for now I'm just using a print statement.
-            printf("INFO: Time since last DGPS update data string is valid.\n%s\n", temp1);
+            //Store in the relevant struct variable
+            parsedData.gpsData_tDgps = atof(temp1);
+            printf("%.2f\n", parsedData.gpsData_tDgps);
         }
         else {
             printf("ERROR: Time since last DGPS update data is NOT Correct!!!\n");
@@ -466,8 +490,9 @@ void Parse_gps_data(char *SENTENCE1)
         }
         //Comparing the s_temp variable with the differential reference station ID string length to ensure the string is of valid length.
         if (s_temp == strlen(temp1)) {
-            //Here the actual parsing will be done, for now I'm just using a print statement.
-            printf("INFO: Valid Differential Reference Station ID.\n%s\n", temp1);
+            //Store in the relevant struct variable
+            parsedData.gpsData_drsID = atoi(temp1);
+            printf("%d\n", parsedData.gpsData_drsID);
         }
         else {
             printf("ERROR: Differential reference station ID is NOT Correct i.e., Range (0000-1023)!!!\n");
