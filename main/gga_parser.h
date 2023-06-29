@@ -192,8 +192,8 @@ typedef struct {
  * @brief default_values upon Incorrect data for geo-separation
  */
 #define DEFAULT_GEOSEP {            \
-    .gpsData_geoSep = 999.9, \
-    .gpsData_geoSepInd = "#" \
+    .gpsData_geoSep = 999.9,        \
+    .gpsData_geoSepInd = "#"        \
 }
 
 /**
@@ -209,13 +209,6 @@ typedef struct {
     .gpsData_tDgps = 999.99,                \
     .gpsData_drsID = "####"                 \
 }
-
-/**
- * @brief nmea_gga_validator function validates and check the input NMEA sentence by checking its integrity.
- * @param The NMEA sentence is given to the function as the parameter through a pointer.
- * @return The return type is bool which indicates whether the sentence is valid or not (true or false)
- */
-bool nmea_gga_validator(char* );
 
 /**
  * @brief Parse_gps_data function parses the validated string into readable information such as longitude, latitude, time etc.
@@ -290,7 +283,7 @@ int getSatData (char* );
 /**
  * @brief getSatData function prints the satellite data to console and gives satTracked value to user
  * @param NMEA_SENTENCE is given as the parameter
- * @return int is the return type which returns the gpsData_satTracked
+ * @return int is the return type which returns the gps quality indicator
  */
 int getQInd (char* );
 
