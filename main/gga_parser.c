@@ -50,7 +50,6 @@
 //Global declarations
 static nmea_Parsed_t s_parsedData      = DEFAULT_PARSED_DATA;
 static gpsData_Time_t s_time           = DEFAULT_TIME;
-static gpsData_Position_t s_position   = DEFAULT_POSITION;
 static gpsData_latitude_t s_latitude   = DEFAULT_LATITUDE;
 static gpsData_longitude_t s_longitude = DEFAULT_LONGITUDE;
 static gpsData_altitude_t s_altitude   = DEFAULT_ALTITUDE;
@@ -861,29 +860,31 @@ int getQInd (char* SENTENCE)
 
 /**
  * @brief getDrs function prints the DIFFERENTIAL REFERENCE STATION ID data to console and gives drsID value to user
- * @param NMEA_SENTENCE is given as the parameter
- * @return char* is the return type which returns the pointer to gpsData_drsID
+ * @param SENTENCE is given as the parameter
+ * @param buffer is the buffer to store the drsID value the buffer size must be atleast 5
+ * @return void
  */
-char* getDrs (char* SENTENCE)
+void getDrs(char* SENTENCE, char* buffer)
 {
     nmea_Parsed_t getdrsID = Parse_gps_data(SENTENCE);
     if (s_statusE.isEmpty_satellite) {
         printf("WARNING: DIFFERENTIAL REFERENCE STATION ID data field is empty!\n");
-        return s_parsedData.gpsData_drsID; //return default value
+        strcpy(buffer, s_parsedData.gpsData_drsID); // Copy default value to buffer
     }
     else if (s_statusF.isFalse_drsID) {
         printf("ERROR: DIFFERENTIAL REFERENCE STATION ID is NOT Correct i.e., Range (0000-1023)!!!\n");
-        return s_parsedData.gpsData_drsID; //return default value
+        strcpy(buffer, s_parsedData.gpsData_drsID); // Copy default value to buffer
     }
     else {
         printf("DIFFERENTIAL REFERENCE STATION ID---> %s\n", getdrsID.gpsData_drsID);
-        return getdrsID.gpsData_drsID;
+        strcpy(buffer, getdrsID.gpsData_drsID); // Copy drsID value to buffer
     }
 }
 
-//A test string is used to check whether the function Parse_gps_data is working properly.
+
 void app_main(void) {
-    char *NMEA_SENTENCE = "$GPGGA,002153.000,3342.6618,N,11751.3858,W,1,10,1.2,27.0,M,-34.2,M,,0000*5E";
-    float tdgps = getTdgps(NMEA_SENTENCE);
-    
+    char* NMEA = "$GPGGA,002153.000,3342.6618,N,11751.3858,W,1,10,1.2,27.0,M,-34.2,M,,0000*5E";
+    char* drs = malloc(5);
+    getDrs(NMEA, drs);
+    free(drs);
 }

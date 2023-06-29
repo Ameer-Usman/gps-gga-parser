@@ -1,5 +1,7 @@
-
-
+/**
+ * @brief Version v1.0 for the gga_parser.h to parse the gga sentence of nmea-0183 gps format.
+ * -This library provides individual as well as total parsed data for the GGA sentence.
+*/
 
 #pragma once
 
@@ -283,21 +285,22 @@ float getTdgps (char* );
  * @param NMEA_SENTENCE is given as the parameter
  * @return int is the return type which returns the gpsData_satTracked
  */
-int getSatData (char* SENTENCE);
+int getSatData (char* );
 
 /**
  * @brief getSatData function prints the satellite data to console and gives satTracked value to user
  * @param NMEA_SENTENCE is given as the parameter
  * @return int is the return type which returns the gpsData_satTracked
  */
-int getQInd (char* SENTENCE);
+int getQInd (char* );
 
 /**
  * @brief getDrs function prints the DIFFERENTIAL REFERENCE STATION ID data to console and gives drsID value to user
- * @param NMEA_SENTENCE is given as the parameter
- * @return char* is the return type which returns the pointer to gpsData_drsID
+ * @param SENTENCE is given as the parameter
+ * @param buffer is the buffer to store the drsID value the buffer size must be atleast 5
+ * @return void
  */
-char* getDrs (char* SENTENCE);
+void getDrs(char* , char* );
 
 #ifdef __cplusplus
 }
