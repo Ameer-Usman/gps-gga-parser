@@ -87,5 +87,5 @@ Feel free to contact back for any queries and suggestions.
 
 ## AUTHOR
 - NAME: M-AMEER USMAN
-- EMAIL: ameerusman194@gmail.com
+- EMAIL: ameeru572@gmail.com
 - GIT-HUB: @Ameer-Usman
